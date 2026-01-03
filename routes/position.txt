@@ -1,0 +1,16 @@
+from flask import Blueprint, request, jsonify
+from utils.locator import estimate_room
+
+position_bp = Blueprint("position", __name__)
+
+@position_bp.route("/position", methods=["POST"])
+def position():
+    uuid = request.json.get("uuid")
+    rssi = request.json.get("rssi")
+    suffix = uuid[-4:].upper()
+
+    room = estimate_room(suffix, rssi)
+    if not room:
+        return jsonify({"error": "No se pudo estimar la habitación"}), 404
+
+    return jsonify({"habitacion": room})

@@ -1,0 +1,33 @@
+from models.beacons import COVERAGE_MAP
+
+
+from collections import defaultdict
+
+def rssi_score(rssi):
+    if rssi > -60:
+        return 3  # muy cerca
+    elif rssi > -75:
+        return 2  # cerca
+    elif rssi > -90:
+        return 1  # lejos
+    else:
+        return 0  # ignorar
+
+
+def estimate_room_from_multiple(beacons):
+    scores = defaultdict(int)
+
+    for b in beacons:
+        suffix = b["uuid"][-4:].upper()
+        rssi = b["rssi"]
+        rooms = COVERAGE_MAP.get(suffix, [])
+        score = rssi_score(rssi)
+        for i, room in enumerate(rooms):
+            # penalización por distancia en cobertura
+            scores[room] += score - i
+
+    # elegir la habitación con mayor puntuación
+    if scores:
+        return max(scores.items(), key=lambda x: x[1])[0]
+    return None
+

@@ -1,0 +1,5 @@
+COVERAGE_MAP = {
+    "A001": ["salon", "entrada", "cocina"],
+    "A002": ["habitacion_1", "baño_1", "habitacion_3"],
+    "A003": ["habitacion_2", "baño_2"]
+}
