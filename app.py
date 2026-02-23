@@ -4,20 +4,23 @@ from db.mongo import close_db
 from blueprints.position import position_bp
 from blueprints.rooms import rooms_bp
 from blueprints.routes import routes_bp
+from blueprints import sensors_bp
+from utils.ml_model import load_models
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Registrar blueprints
     app.register_blueprint(position_bp, url_prefix="/position")
     app.register_blueprint(rooms_bp, url_prefix="/rooms")
     app.register_blueprint(routes_bp, url_prefix="/routes")
+    app.register_blueprint(sensors_bp, url_prefix="/sensors")
 
-    # Cerrar Mongo al terminar el contexto
     app.teardown_appcontext(close_db)
+    load_models()
 
     return app
+
 
 if __name__ == "__main__":
     app = create_app()

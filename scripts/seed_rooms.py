@@ -27,11 +27,17 @@ def seed_rooms():
             "has_beacon": True,
             "beacons": [
                 {
-                    "id": "BEACON_SALON",
+                    "id": "BEACON_SALON1",
                     "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-01",
                     "major": 10007,
                     "minor": 4921
-                }
+                },
+                {
+                    "id": "BEACON_SALON2",
+                    "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-05",
+                    "major": 10007,
+                    "minor": 4891
+                },
             ],
             "current_occupancy": 0,
             "connections": ["ENTRADA", "PASILLO"]
@@ -75,7 +81,14 @@ def seed_rooms():
             "name": "Baño 2",
             "poi_id": "poi_70b24188-a590-4beb-b003-5aa9e7b44b95",
             "has_beacon": False,
-            "beacons": [],
+            "beacons": [
+                {
+                    "id": "BEACON_BANO2",
+                    "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-06",
+                    "major": 10007,
+                    "minor": 4903
+                }
+            ],
             "current_occupancy": 0,
             "connections": ["PASILLO"]
         },
@@ -99,8 +112,15 @@ def seed_rooms():
             "_id": "HAB3",
             "name": "Habitación 3",
             "poi_id": "poi_f93ff721-4606-45dc-9fcc-bf1d1d00b920",
-            "has_beacon": False,
-            "beacons": [],
+            "has_beacon": True,
+            "beacons": [
+                {
+                    "id": "BEACON_HAB3",
+                    "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-04",
+                    "major": 10007,
+                    "minor": 4850
+                }
+            ],
             "current_occupancy": 0,
             "connections": ["PASILLO"]
         },
