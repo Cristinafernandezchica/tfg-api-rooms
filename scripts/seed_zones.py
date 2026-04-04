@@ -12,12 +12,7 @@ def seed_zones():
 
     zones = [
         # SALÓN
-        {
-            "room_id": "SALON",
-            "zone_id": "ventana",
-            "name": "Zona ventana",
-            "description": "Ventana de aluminio con vistas al patio interior comunitario."
-        },
+
         {
             "room_id": "SALON",
             "zone_id": "mesa_comedor",
@@ -76,27 +71,15 @@ def seed_zones():
         # COCINA
         {
             "room_id": "COCINA",
-            "zone_id": "encimera",
-            "name": "Zona encimera",
+            "zone_id": "centro_cocina",
+            "name": "Zona centro cocina",
             "description": "Encimera de la cocina, de color blanca con detalles en color oscuro."
-        },
-        {
-            "room_id": "COCINA",
-            "zone_id": "vitro_fregadero",
-            "name": "Zona vitro y fregadero",
-            "description": "Zona de la encimera con vitrocerámica instalada, junto a ella se encuentra el fregadero."
-        },
-        {
-            "room_id": "COCINA",
-            "zone_id": "alacena",
-            "name": "Zona alacena",
-            "description": "Zona de la alacena, esta cuaenta con una estantería de madera con estantes que cubren todo el alto del espacio."
         },
 
         # PASILLO
         {
             "room_id": "PASILLO",
-            "zone_id": "centro",
+            "zone_id": "centro_pasillo",
             "name": "Zona central",
             "description": "Centro del pasillo. Al fondo podemos ver un cuadro con decoración marina y un zapatero de madera."
         },
@@ -104,23 +87,9 @@ def seed_zones():
         # ENTRADA
         {
             "room_id": "ENTRADA",
-            "zone_id": "centro",
+            "zone_id": "centro_entrada",
             "name": "Zona central",
             "description": "La puerta de entrada a la vivienda es metálica. Nada más entrar, encontramos un armario empotrado con puertas de espejo."
-        },
-
-        # BAÑO 1 
-        {
-            "room_id": "BAN1",
-            "zone_id": "ducha",
-            "name": "Zona ducha",
-            "description": "Plato de ducha antideslizante,con mampara de doble hoja. En frente, una ventana que da a un patio interior con tendedero."
-        },
-        {
-            "room_id": "BAN1",
-            "zone_id": "lavamanos",
-            "name": "Zona lavamanos",
-            "description": "De frente, un lavamanos con mueble tipo cajonera y un espejo de tamaño mediano. A la izquierda, el inodoro marca Roca."
         },
         # BAÑO 2 
         {

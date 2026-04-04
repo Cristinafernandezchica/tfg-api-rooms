@@ -12,7 +12,7 @@ def list_rooms():
     """
     db = get_db()
     cursor = db.rooms.find(
-        {},
+        {"is_transit": {"$ne": True}},
         {
             "_id": 1,
             "name": 1,

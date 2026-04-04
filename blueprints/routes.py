@@ -1,9 +1,37 @@
+import os
+
 from flask import Blueprint, request, jsonify
 from db.mongo import get_db
 from utils.time_utils import now_iso
 from .graph import build_room_graph, bfs, dfs, rooms_to_pois
 
 routes_bp = Blueprint("routes", __name__)
+
+
+def pois_with_coords(db, poi_ids):
+    result = []
+    for pid in poi_ids:
+        poi = db.pois.find_one({"puid": pid})
+        if not poi:
+            continue
+
+        x = poi.get("x")
+        y = poi.get("y")
+        floor = poi.get("floor") or poi.get("floor_number")
+
+        if x is None or y is None:
+            continue
+
+        result.append({
+            "puid": pid,
+            "x": x,
+            "y": y,
+            "floor": floor
+        })
+
+    return result
+
+
 
 @routes_bp.route("/auto/<algorithm>", methods=["POST"])
 def create_auto_route(algorithm):
@@ -14,40 +42,57 @@ def create_auto_route(algorithm):
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
 
-    # Obtener habitación actual del usuario
-    user_state = db.users_state.find_one({"user_id": user_id})
-    if not user_state:
-        return jsonify({"error": "user has no position yet"}), 404
+    # NUEVO: leer variable de entorno
+    force_start = os.getenv("FORCE_ROUTE_START", "0") == "1"
 
-    start_room = user_state["current_room"]
+    if force_start:
+        # FORZAR INICIO EN ENTRADA
+        start_room = "ENTRADA"
+        print("Pasa la entrada")
+    else:
+        # MODO NORMAL: usar la posición real del usuario
+        user_state = db.users_state.find_one({"user_id": user_id})
+        if not user_state:
+            return jsonify({"error": "user has no position yet"}), 404
+
+        start_room = user_state["current_room"]
+        print("No pasa la entrada")
 
     # Construir grafo real desde rooms
     graph = build_room_graph(db)
+    print(f"Grafo construido: {graph}")
 
     # Generar ruta
     if algorithm == "bfs":
         room_route = bfs(graph, start_room)
+        print(f"Ruta BFS generada: {room_route}")
     elif algorithm == "dfs":
         room_route = dfs(graph, start_room)
+        print(f"Ruta DFS generada: {room_route}")
     else:
         return jsonify({"error": "invalid algorithm"}), 400
 
-    # Convertir habitaciones → POIs
-    poi_route = rooms_to_pois(db, room_route)
+    # Convertir habitaciones → POIs (IDs)
+    poi_ids = rooms_to_pois(db, room_route)
+    print(f"Ruta POIs generada (IDs): {poi_ids}")
+
+    # NUEVO: obtener también coordenadas de cada POI
+    poi_route_with_coords = pois_with_coords(db, poi_ids)
+    print(f"Ruta POIs con coords: {poi_route_with_coords}")
 
     # Crear route_id único
     route_id = f"{algorithm}_{user_id}_{now_iso()}"
 
-    # Guardar ruta en MongoDB
+    # Guardar ruta en MongoDB (igual que antes)
     db.routes.insert_one({
         "_id": route_id,
         "name": f"Ruta {algorithm.upper()} para {user_id}",
         "description": f"Generada automáticamente usando {algorithm.upper()}",
-        "steps": [{"room_id": r, "poi_id": p} for r, p in zip(room_route, poi_route)],
+        "steps": [{"room_id": r, "poi_id": p} for r, p in zip(room_route, poi_ids)],
         "created_at": now_iso()
     })
 
-    # Asignar ruta al usuario
+    # Asignar ruta al usuario (igual que antes)
     db.user_routes.update_one(
         {"user_id": user_id},
         {
@@ -63,14 +108,15 @@ def create_auto_route(algorithm):
         upsert=True
     )
 
+    # RESPUESTA: mantenemos lo anterior y añadimos coords
     return jsonify({
         "status": "ok",
         "algorithm": algorithm,
         "rooms": room_route,
-        "pois": poi_route,
+        "poi_ids": poi_ids,              # lo que ya tenías
+        "pois": poi_route_with_coords,   # NUEVO: con lat/lon para Android
         "route_id": route_id
     }), 200
-
 
 
 @routes_bp.route("/<route_id>", methods=["GET"])
@@ -84,6 +130,7 @@ def get_route(route_id):
     route["route_id"] = route["_id"]
     del route["_id"]
     return jsonify(route), 200
+
 
 @routes_bp.route("/assign", methods=["POST"])
 def assign_route():
@@ -120,6 +167,7 @@ def assign_route():
 
     return jsonify({"status": "ok"}), 200
 
+
 @routes_bp.route("/user/<user_id>", methods=["GET"])
 def get_user_route(user_id):
     """
@@ -155,6 +203,7 @@ def get_user_route(user_id):
         "user_route": user_route_response,
         "route": route_response
     }), 200
+
 
 @routes_bp.route("/progress", methods=["POST"])
 def update_progress():
@@ -224,6 +273,7 @@ def list_routes():
     routes = list(db.routes.find({}, {"_id": 1, "name": 1, "created_at": 1, "steps": 1}))
     return jsonify(routes), 200
 
+
 # Borrar ruta
 @routes_bp.route("/<route_id>", methods=["DELETE"])
 def delete_route(route_id):
@@ -259,12 +309,14 @@ def preview_route(algorithm):
     else:
         return jsonify({"error": "invalid algorithm"}), 400
 
-    poi_route = rooms_to_pois(db, room_route)
+    poi_ids = rooms_to_pois(db, room_route)
+    poi_route_with_coords = pois_with_coords(db, poi_ids)
 
     return jsonify({
         "status": "ok",
         "rooms": room_route,
-        "pois": poi_route
+        "poi_ids": poi_ids,
+        "pois": poi_route_with_coords
     }), 200
 
 

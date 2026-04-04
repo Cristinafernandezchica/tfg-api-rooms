@@ -1,10 +1,10 @@
 import os
 import numpy as np
-import pandas as pd
 from pymongo import MongoClient
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
+from sklearn.utils import resample
 import joblib
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/indoor_db")
@@ -15,10 +15,34 @@ print("📥 Leyendo datos de entrenamiento...")
 data = list(db.training_sensor_data.find({}))
 
 if not data:
-    print("❌ No hay datos en training_sensor_data")
+    print("❌ No hay datos")
     exit()
 
-# Extraer todos los sensor_id posibles
+VALID_ROOMS = ["ENTRADA", "SALON", "COCINA", "HAB1", "HAB2", "HAB3", "BAN2"]
+
+
+def normalize_rssi(rssi):
+    if rssi is None:
+        return -100
+    return max(-100, min(-40, int(rssi)))
+
+def is_valid_sample(row):
+    sensors = row.get("sensors", [])
+    if len(sensors) < 2:
+        return False
+    if all(s.get("rssi", -100) < -95 for s in sensors):
+        return False
+    return True
+
+# Filtrar muestras
+data = [row for row in data if row["room_id"] in VALID_ROOMS]
+
+
+if not data:
+    print("❌ No quedan datos válidos")
+    exit()
+
+# Sensores únicos
 all_sensor_ids = sorted({
     s["sensor_id"]
     for row in data
@@ -28,58 +52,80 @@ all_sensor_ids = sorted({
 print(f"Detectados {len(all_sensor_ids)} sensores únicos.")
 
 def build_vector(sensors):
-    sensor_map = {s["sensor_id"]: s["rssi"] for s in sensors}
+    sensor_map = {
+        s["sensor_id"]: normalize_rssi(s["rssi"])
+        for s in sensors
+    }
     return [sensor_map.get(sid, -100) for sid in all_sensor_ids]
 
-X = np.array([build_vector(row["sensors"]) for row in data])
-y_room = np.array([row["room_id"] for row in data])
-y_zone = np.array([row.get("zone_id") for row in data])
+X = np.array([build_vector(r["sensors"]) for r in data])
+y_room = np.array([r["room_id"] for r in data])
+y_zone = np.array([r.get("zone_id") for r in data])
 
-# -------------------------
-# MODELO DE HABITACIÓN
-# -------------------------
+def balance_classes(X, y):
+    classes = np.unique(y)
+    max_count = max((y == c).sum() for c in classes)
+    Xb, yb = [], []
+    for c in classes:
+        Xc = X[y == c]
+        yc = y[y == c]
+        Xr, yr = resample(Xc, yc, replace=True, n_samples=max_count, random_state=42)
+        Xb.append(Xr)
+        yb.append(yr)
+    return np.vstack(Xb), np.concatenate(yb)
+
 print("\n🏠 Entrenando modelo de habitación...")
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y_room, test_size=0.2, random_state=42, stratify=y_room
 )
 
-room_model = RandomForestClassifier(n_estimators=200, random_state=42)
-room_model.fit(X_train, y_train)
+X_train_bal, y_train_bal = balance_classes(X_train, y_train)
 
-y_pred = room_model.predict(X_test)
-print("\n📊 Resultados modelo habitación:")
-print(classification_report(y_test, y_pred))
+room_model = RandomForestClassifier(
+    n_estimators=300,
+    random_state=42,
+    n_jobs=-1
+)
+room_model.fit(X_train_bal, y_train_bal)
 
-# 📁 CAMBIO AQUÍ: Guardar en carpeta scripts
+print(classification_report(y_test, room_model.predict(X_test)))
+
+os.makedirs("scripts", exist_ok=True)
 joblib.dump(room_model, "scripts/room_model.pkl")
 joblib.dump(all_sensor_ids, "scripts/sensor_ids.pkl")
-print("💾 Guardado scripts/room_model.pkl y scripts/sensor_ids.pkl")
+
+print("💾 Guardado modelo de habitación")
 
 # -------------------------
-# MODELO DE ZONAS (opcional)
+# MODELOS DE ZONAS POR HABITACIÓN
 # -------------------------
-mask = [z is not None for z in y_zone]
 
-if any(mask):
-    print("\n📍 Entrenando modelo de zonas...")
+print("\n📍 Entrenando modelos de zonas por habitación...")
 
-    Xz = X[mask]
-    yz = y_zone[mask]
+for room in VALID_ROOMS:
+    rows = [r for r in data if r["room_id"] == room and r.get("zone_id")]
 
-    Xz_train, Xz_test, yz_train, yz_test = train_test_split(
-        Xz, yz, test_size=0.2, random_state=42, stratify=yz
+    if len(rows) < 5:
+        print(f"⚠️ No hay suficientes muestras para {room}, saltando...")
+        continue
+
+    Xr = np.array([build_vector(r["sensors"]) for r in rows])
+    yr = np.array([r["zone_id"] for r in rows])
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        Xr, yr, test_size=0.2, random_state=42, stratify=yr
     )
 
-    zone_model = RandomForestClassifier(n_estimators=200, random_state=42)
-    zone_model.fit(Xz_train, yz_train)
+    model = RandomForestClassifier(
+        n_estimators=300,
+        random_state=42,
+        n_jobs=-1
+    )
+    model.fit(X_train, y_train)
 
-    yz_pred = zone_model.predict(Xz_test)
-    print("\n📊 Resultados modelo zonas:")
-    print(classification_report(yz_test, yz_pred))
+    print(f"\n📊 Resultados zonas {room}:")
+    print(classification_report(y_test, model.predict(X_test)))
 
-    # 📁 CAMBIO AQUÍ: Guardar en carpeta scripts
-    joblib.dump(zone_model, "scripts/zone_model.pkl")
-    print("💾 Guardado scripts/zone_model.pkl")
-else:
-    print("\n⚠️ No hay datos de zonas — no se entrena modelo de zonas.")
+    joblib.dump(model, f"scripts/zone_model_{room}.pkl")
+    print(f"💾 Guardado scripts/zone_model_{room}.pkl")

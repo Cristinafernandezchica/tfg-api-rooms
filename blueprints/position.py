@@ -22,6 +22,28 @@ def apply_room_update(db, user_id, detected_room, confidence, timestamp):
 
     user_state = users_state.find_one({"user_id": user_id})
 
+    if room.get("is_transit", False):
+        # Solo actualizar posición del usuario, pero no ocupación
+        users_state.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "current_room": detected_room,
+                    "last_update": timestamp,
+                    "confidence": confidence,
+                    "last_event": "transit",
+                    "last_room_change": timestamp
+                }
+            },
+            upsert=True
+        )
+        return {
+            "status": "ok",
+            "event": "transit",
+            "room": detected_room,
+            "message": "Zona de tránsito - no se registra ocupación"
+        }, 200
+
     # Si el usuario no tenía estado previo
     if not user_state:
         users_state.insert_one({

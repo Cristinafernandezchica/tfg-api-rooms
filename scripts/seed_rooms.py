@@ -18,6 +18,7 @@ def seed_rooms():
             "has_beacon": False,
             "beacons": [],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["SALON"]
         },
         {
@@ -27,19 +28,14 @@ def seed_rooms():
             "has_beacon": True,
             "beacons": [
                 {
-                    "id": "BEACON_SALON1",
-                    "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-01",
-                    "major": 10007,
-                    "minor": 4921
-                },
-                {
-                    "id": "BEACON_SALON2",
+                    "id": "BEACON_SALON",
                     "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-05",
                     "major": 10007,
                     "minor": 4891
                 },
             ],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["ENTRADA", "PASILLO"]
         },
         {
@@ -47,8 +43,16 @@ def seed_rooms():
             "name": "Cocina",
             "poi_id": "poi_fbc620c5-0578-43e1-b04b-9d9a93239d7d",
             "has_beacon": False,
-            "beacons": [],
+            "beacons": [
+                {
+                    "id": "BEACON_COCINA",
+                    "uuid": "DF-7E-1C-79-43-E9-44-FF-88-6F-1D-1F-7D-A6-A0-01",
+                    "major": 10007,
+                    "minor": 4921
+                },
+            ],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["PASILLO"]
         },
         {
@@ -65,15 +69,7 @@ def seed_rooms():
                 }
             ],
             "current_occupancy": 0,
-            "connections": ["PASILLO"]
-        },
-        {
-            "_id": "BAN1",
-            "name": "Baño 1",
-            "poi_id": "poi_40f8c046-cb76-4dbb-900d-bd1d8590cd50",
-            "has_beacon": False,
-            "beacons": [],
-            "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["PASILLO"]
         },
         {
@@ -90,6 +86,7 @@ def seed_rooms():
                 }
             ],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["PASILLO"]
         },
         {
@@ -106,6 +103,7 @@ def seed_rooms():
                 }
             ],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["PASILLO"]
         },
         {
@@ -122,6 +120,7 @@ def seed_rooms():
                 }
             ],
             "current_occupancy": 0,
+            "is_transit": False,
             "connections": ["PASILLO"]
         },
         {
@@ -131,7 +130,8 @@ def seed_rooms():
             "has_beacon": False,
             "beacons": [],
             "current_occupancy": 0,
-            "connections": ["SALON", "COCINA", "HAB1", "BAN1", "BAN2", "HAB2", "HAB3"]
+            "is_transit": True,
+            "connections": ["SALON", "COCINA", "HAB1", "BAN2", "HAB2", "HAB3"]
         }
     ]
 

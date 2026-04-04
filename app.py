@@ -4,7 +4,7 @@ from db.mongo import close_db
 from blueprints.position import position_bp
 from blueprints.rooms import rooms_bp
 from blueprints.routes import routes_bp
-from blueprints import sensors_bp
+from blueprints.sensors import sensors_bp
 from utils.ml_model import load_models
 
 def create_app():
@@ -24,5 +24,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app = create_app()
     app.run(host="0.0.0.0", port=5001, debug=True)
