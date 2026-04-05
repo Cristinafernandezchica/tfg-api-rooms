@@ -51,25 +51,19 @@ def smooth_label(history, new_label):
     if new_label is None:
         return history[-1] if history else None
     
-    # Si no hay historial, usar nueva detección
     if not history:
         history.append(new_label)
         return new_label
     
-    # Obtener última habitación del historial
     last_room = history[-1]
     
-    # Si la nueva detección es diferente a la anterior
     if new_label != last_room:
-        # Limpiar historial para evitar cambios bruscos
         history.clear()
         history.append(new_label)
         return new_label
     
-    # Si es la misma, añadir al historial
     history.append(new_label)
     
-    # Si el historial está lleno, devolver la más frecuente
     if len(history) >= ROOM_HISTORY_SIZE:
         counts = {}
         for v in history:
@@ -90,14 +84,11 @@ def heuristic_confidence(sensors):
 
 
 def heuristic_room_override(sensors):
-    # Ordenar por intensidad
     sensors_sorted = sorted(sensors, key=lambda s: s["rssi"], reverse=True)
 
-    # Beacon más fuerte
     sid = sensors_sorted[0]["sensor_id"]
     rssi = sensors_sorted[0]["rssi"]
 
-    # 1) Habitaciones con beacon propio → detección directa
     if sid == "BEACON_SALON" and rssi > -65:
         print(f"   [Heurística] Beacon SALON fuerte ({rssi}) -> SALON")
         return "SALON"
@@ -122,7 +113,6 @@ def heuristic_room_override(sensors):
         print(f"   [Heurística] Beacon BAN2 fuerte ({rssi}) -> BAN2")
         return "BAN2"
 
-    # 2) Preparar señales para ENTRADA (única sin beacon)
     salon = [s for s in sensors if s["sensor_id"] == "BEACON_SALON"]
     cocina = [s for s in sensors if s["sensor_id"] == "BEACON_COCINA"]
     hab1 = [s for s in sensors if s["sensor_id"] == "BEACON_HAB1"]
@@ -130,7 +120,6 @@ def heuristic_room_override(sensors):
     hab3 = [s for s in sensors if s["sensor_id"] == "BEACON_HAB3"]
     ban2 = [s for s in sensors if s["sensor_id"] == "BEACON_BANO2"]
     
-    # Calcular promedios - Está pensado por si hay más de un beacon por habitación (con vistas a futuro)
     avg_salon = sum(s["rssi"] for s in salon) / len(salon) if salon else -100
     avg_cocina = sum(s["rssi"] for s in cocina) / len(cocina) if cocina else -100
     avg_hab1 = hab1[0]["rssi"] if hab1 else -100
@@ -140,12 +129,7 @@ def heuristic_room_override(sensors):
     
     print(f"   [Heurística] Promedios - SALÓN: {avg_salon:.1f}, COCINA: {avg_cocina:.1f}, HAB1: {avg_hab1:.1f}, BAN2: {avg_ban2:.1f}")
     
-    # 3) DETECCIÓN DE ENTRADA (múltiples patrones basados en datos reales)
-    
-    # Patrón A: SALÓN fuerte pero NO es SALÓN (porque el beacon no superó el umbral)
-    # En ENTRADA, SALÓN puede estar entre -62 y -84
-    if salon and avg_salon > -85:  # Hay señal de SALÓN
-        # Contar cuántas otras habitaciones tienen señal significativa
+    if salon and avg_salon > -85:
         otras_habitaciones = 0
         if avg_cocina > -80: otras_habitaciones += 1
         if avg_hab1 > -80: otras_habitaciones += 1
@@ -153,48 +137,19 @@ def heuristic_room_override(sensors):
         if avg_hab3 > -80: otras_habitaciones += 1
         if avg_ban2 > -80: otras_habitaciones += 1
         
-        # Si SOLO SALÓN tiene señal fuerte, es ENTRADA
         if otras_habitaciones <= 1:
-            print(f"   [Heurística] Patrón ENTRADA A: solo SALÓN detectable ({otras_habitaciones} otras)")
+            print(f"   [Heurística] Patrón ENTRADA A: solo SALÓN detectable")
             return "ENTRADA"
     
-    # Patrón B: SALÓN y COCINA tienen señales similares (ambas moderadas)
-    # En SALÓN real, COCINA sería más débil
     if salon and cocina:
         diferencia = abs(avg_salon - avg_cocina)
-        # Si están cerca (diferencia < 10dB), probablemente ENTRADA
         if diferencia < 10 and avg_salon > -85 and avg_cocina > -85:
-            print(f"   [Heurística] Patrón ENTRADA B: SALÓN y COCINA cercanos (dif {diferencia:.1f}dB)")
+            print(f"   [Heurística] Patrón ENTRADA B: SALÓN y COCINA cercanos")
             return "ENTRADA"
     
-    # Patrón C: SALÓN moderado y HAB1 débil
-    if salon and avg_salon > -80 and avg_hab1 < -80:
-        # Verificar que no sea SALÓN (en SALÓN, HAB1 sería más fuerte)
-        if avg_hab1 < -85:  # HAB1 muy débil
-            print(f"   [Heurística] Patrón ENTRADA C: SALÓN moderado ({avg_salon:.1f}), HAB1 débil ({avg_hab1:.1f})")
-            return "ENTRADA"
-    
-    # Patrón D: Señales múltiples pero ninguna supera el umbral del beacon
-    # Este es el caso más común: todas las señales son débiles o moderadas
-    if not any([
-        rssi > -75 for s in sensors if s["sensor_id"] == "BEACON_SALON"
-    ]) and not any([
-        rssi > -75 for s in sensors if s["sensor_id"] == "BEACON_COCINA"
-    ]) and not any([
-        rssi > -78 for s in sensors if s["sensor_id"] in ["BEACON_HAB1", "BEACON_HAB2", "BEACON_HAB3"]
-    ]) and not any([
-        rssi > -80 for s in sensors if s["sensor_id"] == "BEACON_BANO2"
-    ]):
-        # Ningún beacon superó su umbral
-        if len(sensors) >= 2:
-            print(f"   [Heurística] Patrón ENTRADA D: ningún beacon fuerte, {len(sensors)} sensores presentes")
-            return "ENTRADA"
-    
-    # Patrón E: Basado en tus datos - cuando SALÓN está entre -70 y -80
     if salon and -80 < avg_salon < -65:
-        # Verificar que COCINA no sea muy fuerte
         if avg_cocina < -75 or avg_cocina == -100:
-            print(f"   [Heurística] Patrón ENTRADA E: SALÓN en rango ENTRADA ({avg_salon:.1f})")
+            print(f"   [Heurística] Patrón ENTRADA E: SALÓN en rango ENTRADA")
             return "ENTRADA"
     
     print(f"   [Heurística] Ningún patrón coincidió")
@@ -203,148 +158,184 @@ def heuristic_room_override(sensors):
 
 @sensors_bp.route("/update_position", methods=["POST"])
 def update_position_from_sensors():
-    print("Actualizando posición desde sensores...")
+    """Endpoint para detección de posición desde sensores - CON sistema de confirmación"""
     db = get_db()
     data = request.get_json() or {}
-
+    
     user_id = data.get("user_id")
     sensors = data.get("sensors") or []
     timestamp = data.get("timestamp", now_iso())
-
-    print(f"Datos recibidos: {data}")
+    
     if not user_id or not sensors:
         return jsonify({"error": "user_id and sensors are required"}), 400
-
-    # 1. FILTRADO INICIAL
+    
+    # Filtrar señales débiles
     sensors = [s for s in sensors if s.get("rssi", -100) > -85]
-    print(f"Señales filtradas (rssi > -85): {[s['sensor_id'] + ':' + str(s['rssi']) for s in sensors]}")
-
-    # Necesitamos al menos 2 sensores
+    
     if len(sensors) < 2:
         return jsonify({
-            "error": "not_enough_beacons",
             "room": None,
             "zone": None,
-            "confidence": 0.0
+            "confidence": 0.0,
+            "status": "insufficient_beacons"
         }), 200
-
-    sensor_room_map = build_sensor_room_map(db)
-    print(f"Mapa de sensores a habitaciones: {sensor_room_map}")
     
+    # Detectar habitación
+    sensor_room_map = build_sensor_room_map(db)
     feature_vector = build_feature_vector_from_sensors(sensors)
-    last_room = user_room_history[user_id][-1] if user_room_history[user_id] else None
-
-    # 3. DETECCIÓN DE HABITACIÓN
+    
     detected_room = None
-    try:
-        # PASO 1: Heurísticas fuertes (prioridad máxima)
-        override = heuristic_room_override(sensors)
-        if override:
-            detected_room = override
-            print(f"✓ Heurística fuerte activada: {detected_room}")
-        else:
-            print("ℹ️ No se activó heurística fuerte. Usando lógica para habitaciones sin beacon...")
-            
-            # PASO 2: Modelo ML para habitaciones sin beacon propio
-            ml_prediction = predict_room(feature_vector)
-            
-            # Solo ENTRADA no tiene beacon propio ahora (COCINA ya tiene beacon)
-            rooms_for_ml = ["ENTRADA"]
-            
-            if ml_prediction in rooms_for_ml:
-                detected_room = ml_prediction
-                print(f"✓ Modelo ML predijo habitación sin beacon: {detected_room}")
-            else:
-                print(f"⚠️ Modelo ML predijo '{ml_prediction}', que no está en la lista de confianza. Ignorando.")
-                detected_room = None
-
-            # PASO 3: Fallback inteligente
-            if not detected_room:
-                print("ℹ️ Usando fallback inteligente (estimate_room_from_sensors)...")
-                detected_room = estimate_room_from_sensors(
-                    sensors=sensors,
-                    sensor_room_map=sensor_room_map,
-                    last_room=last_room
-                )
-                print(f"✓ Fallback eligió: {detected_room}")
-
-    except Exception as e:
-        print(f"❌ Error en detección de habitación: {e}. Usando fallback de emergencia.")
-        detected_room = estimate_room_from_sensors(
-            sensors=sensors,
-            sensor_room_map=sensor_room_map,
-            last_room=last_room
-        )
-
-    # Suavizado final
-    print(f"Habitación antes de suavizado: {detected_room}")
-    room_smoothed = smooth_label(user_room_history[user_id], detected_room)
-    print(f"Habitación suavizada a: {room_smoothed}")
-
-    # Fallback duro
-    if not room_smoothed:
-        room_smoothed = estimate_room_from_sensors(
-            sensors=sensors,
-            sensor_room_map=sensor_room_map,
-            last_room=None
-        )
-        print(f"⚠️ Fallback duro activado, habitación final: {room_smoothed}")
-
-    if not room_smoothed:
-        return jsonify({"error": "could_not_detect_room"}), 400
-
-    # 4. DETECCIÓN DE ZONA
-    zones_for_room = list(db.room_zones.find({"room_id": room_smoothed}))
-
-    zone_smoothed = None
-    if len(zones_for_room) == 0:
-        print(f"Habitación {room_smoothed} no tiene zonas definidas.")
-        zone_smoothed = None
-    elif len(zones_for_room) == 1:
-        zone_smoothed = zones_for_room[0]["zone_id"]
-        print(f"Zona única para {room_smoothed}: {zone_smoothed}")
+    
+    # Intentar heurística primero
+    override = heuristic_room_override(sensors)
+    if override:
+        detected_room = override
+        print(f"✓ Heurística: {detected_room}")
     else:
+        # Usar ML
         try:
-            detected_zone = predict_zone(feature_vector, room_smoothed)
-            print(f"Zona detectada por ML para {room_smoothed}: {detected_zone}")
+            ml_prediction = predict_room(feature_vector)
+            if ml_prediction in ["ENTRADA", "SALON", "COCINA", "HAB1", "HAB2", "HAB3", "BAN2"]:
+                detected_room = ml_prediction
+                print(f"✓ ML predijo: {detected_room}")
         except Exception as e:
-            print(f"Error en predict_zone: {e}")
-            detected_zone = None
-
-        zone_smoothed = smooth_label(user_zone_history[user_id], detected_zone)
-        print(f"Zona suavizada: {zone_smoothed}")
-
-        zone_doc = db.room_zones.find_one(
-            {"room_id": room_smoothed, "zone_id": zone_smoothed}
-        )
-        if not zone_doc:
-            print(f"⚠️ Zona '{zone_smoothed}' no válida para {room_smoothed}. Reseteando.")
-            zone_smoothed = None
-
-    # 5. ACTUALIZAR ESTADO DEL USUARIO
-    from blueprints.position import apply_room_update
+            print(f"Error ML: {e}")
+        
+        # Fallback si no hay detección
+        if not detected_room:
+            detected_room = estimate_room_from_sensors(
+                sensors=sensors,
+                sensor_room_map=sensor_room_map,
+                last_room=None
+            )
+    
+    if not detected_room:
+        return jsonify({"error": "could_not_detect_room"}), 400
+    
+    confidence = heuristic_confidence(sensors)
+    
+    # IMPORTANTE: Importar las funciones de position.py DENTRO de la función
+    # para evitar importaciones circulares
+    from blueprints.position import add_pending_detection, get_confirmed_room, clear_pending_detections, pending_detections, apply_room_update
+    
+    # Añadir detección pendiente
+    add_pending_detection(user_id, detected_room, confidence, timestamp)
+    
+    # Verificar si tenemos confirmación (3 detecciones iguales)
+    confirmed_room = get_confirmed_room(user_id)
+    
+    if not confirmed_room:
+        pending_count = len(pending_detections.get(user_id, []))
+        return jsonify({
+            "status": "pending",
+            "message": f"Confirmando posición ({pending_count}/3)",
+            "room": detected_room,
+            "pending_count": pending_count,
+            "zone": None,
+            "confidence": confidence
+        }), 200
+    
+    # Posición confirmada, actualizar estado
     result, status = apply_room_update(
         db=db,
         user_id=user_id,
-        detected_room=room_smoothed,
-        confidence=None,
+        detected_room=confirmed_room,
+        confidence=confidence,
         timestamp=timestamp
     )
-
-    if zone_smoothed:
-        zone_doc = db.room_zones.find_one(
-            {"room_id": room_smoothed, "zone_id": zone_smoothed},
-            {"_id": 0}
-        )
-        if zone_doc:
-            result["zone"] = zone_smoothed
-            result["zone_info"] = zone_doc
-
-    result["confidence"] = heuristic_confidence(sensors)
-    result["room"] = room_smoothed
-    print(f"Resultado final: {result}")
-
+    
+    # Limpiar detecciones pendientes
+    clear_pending_detections(user_id)
+    
+    # Añadir zona si existe
+    if result.get("room") or confirmed_room:
+        room_for_zone = result.get("room", confirmed_room)
+        zones_for_room = list(db.room_zones.find({"room_id": room_for_zone}))
+        if len(zones_for_room) == 1:
+            result["zone"] = zones_for_room[0]["zone_id"]
+            result["zone_info"] = zones_for_room[0]
+    
+    result["confidence"] = confidence
+    result["status"] = "confirmed"
+    
     return jsonify(result), status
+
+
+@sensors_bp.route("/detect_once", methods=["POST"])
+def detect_once():
+    """
+    Endpoint para detección INMEDIATA sin sistema de confirmación.
+    Útil para pruebas y para el botón "Probar posicionamiento".
+    """
+    db = get_db()
+    data = request.get_json() or {}
+    
+    user_id = data.get("user_id")
+    sensors = data.get("sensors") or []
+    
+    if not user_id or not sensors:
+        return jsonify({"error": "user_id and sensors are required"}), 400
+    
+    # Filtrar señales débiles
+    sensors = [s for s in sensors if s.get("rssi", -100) > -85]
+    
+    if len(sensors) < 2:
+        return jsonify({
+            "room": None,
+            "zone": None,
+            "confidence": 0.0,
+            "error": "not_enough_beacons"
+        }), 200
+    
+    # Detectar habitación
+    sensor_room_map = build_sensor_room_map(db)
+    feature_vector = build_feature_vector_from_sensors(sensors)
+    
+    detected_room = None
+    
+    # Heurística
+    override = heuristic_room_override(sensors)
+    if override:
+        detected_room = override
+        print(f"[detect_once] Heurística: {detected_room}")
+    else:
+        try:
+            ml_prediction = predict_room(feature_vector)
+            if ml_prediction in ["ENTRADA", "SALON", "COCINA", "HAB1", "HAB2", "HAB3", "BAN2"]:
+                detected_room = ml_prediction
+                print(f"[detect_once] ML predijo: {detected_room}")
+        except Exception as e:
+            print(f"[detect_once] Error ML: {e}")
+        
+        if not detected_room:
+            detected_room = estimate_room_from_sensors(
+                sensors=sensors,
+                sensor_room_map=sensor_room_map,
+                last_room=None
+            )
+    
+    if not detected_room:
+        return jsonify({"error": "could_not_detect_room"}), 400
+    
+    # Detectar zona
+    zone = None
+    zones_for_room = list(db.room_zones.find({"room_id": detected_room}))
+    if len(zones_for_room) == 1:
+        zone = zones_for_room[0]["zone_id"]
+    elif len(zones_for_room) > 1:
+        try:
+            detected_zone = predict_zone(feature_vector, detected_room)
+            if detected_zone:
+                zone = detected_zone
+        except Exception as e:
+            print(f"[detect_once] Error en predict_zone: {e}")
+    
+    return jsonify({
+        "room": detected_room,
+        "zone": zone,
+        "confidence": heuristic_confidence(sensors),
+        "sensors_count": len(sensors)
+    }), 200
 
 
 @sensors_bp.route("/training_data", methods=["POST"])
@@ -413,3 +404,32 @@ def training_status():
     ]
     data = list(db.training_sensor_data.aggregate(pipeline))
     return jsonify(data), 200
+
+
+@sensors_bp.route("/get_confirmed_position", methods=["GET"])
+def get_confirmed_position():
+    """
+    Devuelve la posición confirmada del usuario (basada en 3 detecciones)
+    """
+    db = get_db()
+    user_id = request.args.get("user_id")
+    
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    
+    user_state = db.users_state.find_one({"user_id": user_id})
+    
+    if not user_state:
+        return jsonify({
+            "has_position": False,
+            "room": None,
+            "message": "No hay posición confirmada aún"
+        }), 200
+    
+    return jsonify({
+        "has_position": True,
+        "room": user_state.get("current_room"),
+        "last_update": user_state.get("last_update"),
+        "confirmed_at": user_state.get("confirmed_at"),
+        "confidence": user_state.get("confidence")
+    }), 200

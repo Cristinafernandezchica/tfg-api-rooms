@@ -32,6 +32,8 @@ def pois_with_coords(db, poi_ids):
     return result
 
 
+# routes.py - Modificar create_auto_route
+
 @routes_bp.route("/auto/<algorithm>", methods=["POST"])
 def create_auto_route(algorithm):
     db = get_db()
@@ -41,52 +43,72 @@ def create_auto_route(algorithm):
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
 
-    force_start = os.getenv("FORCE_ROUTE_START", "0") == "1"
+    force_start = data.get("force_start", False)
 
     if force_start:
         start_room = "ENTRADA"
+        print(f"🚪 Ruta forzada desde ENTRADA")
     else:
+        # Obtener posición CONFIRMADA del usuario
         user_state = db.users_state.find_one({"user_id": user_id})
         if not user_state:
-            return jsonify({"error": "user has no position yet"}), 404
-        start_room = user_state["current_room"]
+            return jsonify({"error": "user has no confirmed position yet"}), 404
+        
+        start_room = user_state.get("current_room")
+        confirmed_at = user_state.get("confirmed_at")
+        
+        if not start_room:
+            return jsonify({"error": "no confirmed room found"}), 404
+            
+        print(f"📍 Ruta desde posición confirmada: {start_room} (confirmada en {confirmed_at})")
 
-    # Obtener el grafo y las zonas de tránsito
+    # Obtener el grafo
     graph, transit_rooms = build_room_graph(db)
     
-    # Obtener todas las habitaciones destino (excluyendo zonas de tránsito)
-    end_rooms = [r["_id"] for r in db.rooms.find({"is_transit": {"$ne": True}})]
+    # Obtener todas las habitaciones (excluyendo tránsito)
+    all_rooms = [r["_id"] for r in db.rooms.find({"is_transit": {"$ne": True}})]
     
-    # Generar ruta completa que incluya múltiples pasos por PASILLO
-    full_route = []
+    # Generar ruta desde start_room
+    full_route = [start_room]
     current = start_room
+    rooms_to_visit = [r for r in all_rooms if r != start_room]
     
-    for end in end_rooms:
-        if end == current:
-            continue
-        # Calcular camino entre habitaciones respetando transit_rooms
-        path = bfs_with_transit(graph, current, end, transit_rooms)
-        if path and len(path) > 1:
-            # Añadir solo las habitaciones nuevas (evitar duplicados)
-            for room in path[1:]:
+    while rooms_to_visit:
+        best_room = None
+        best_path = None
+        best_distance = float('inf')
+        
+        for target in rooms_to_visit:
+            path = bfs_with_transit(graph, current, target, transit_rooms)
+            if path and len(path) < best_distance:
+                best_distance = len(path)
+                best_room = target
+                best_path = path
+        
+        if best_path and len(best_path) > 1:
+            for room in best_path[1:]:
                 if room not in full_route:
                     full_route.append(room)
-            current = end
+            current = best_room
+            rooms_to_visit.remove(best_room)
+        else:
+            break
     
-    # Expandir para incluir PASILLO donde sea necesario
+    # Expandir para incluir PASILLO
     full_route = expand_transit_points(full_route, transit_rooms)
     
-    # Convertir habitaciones a POIs
+    print(f"📋 Ruta generada: {full_route}")
+    
+    # Convertir a POIs
     poi_ids = rooms_to_pois(db, full_route)
     poi_route_with_coords = pois_with_coords(db, poi_ids)
     
-    # Guardar y devolver ruta
     route_id = f"{algorithm}_{user_id}_{now_iso()}"
     
     db.routes.insert_one({
         "_id": route_id,
         "name": f"Ruta {algorithm.upper()} para {user_id}",
-        "description": f"Generada automáticamente usando {algorithm.upper()}",
+        "description": f"Generada desde {start_room}",
         "steps": [{"room_id": r, "poi_id": p} for r, p in zip(full_route, poi_ids)],
         "created_at": now_iso()
     })
@@ -94,11 +116,53 @@ def create_auto_route(algorithm):
     return jsonify({
         "status": "ok",
         "algorithm": algorithm,
+        "start_room": start_room,
         "rooms": full_route,
         "poi_ids": poi_ids,
         "pois": poi_route_with_coords,
         "route_id": route_id
     }), 200
+
+def generate_route_from_start(graph, start_room, all_rooms, transit_rooms):
+    """
+    Genera una ruta que empieza en start_room y visita todas las demás habitaciones
+    usando el algoritmo de vecino más cercano (greedy)
+    """
+    if start_room not in all_rooms and start_room != "PASILLO":
+        start_room = "ENTRADA"
+    
+    # Habitaciones a visitar (todas excepto la inicial)
+    rooms_to_visit = [r for r in all_rooms if r != start_room]
+    
+    full_route = [start_room]
+    current = start_room
+    
+    while rooms_to_visit:
+        best_room = None
+        best_path = None
+        best_distance = float('inf')
+        
+        for target in rooms_to_visit:
+            path = bfs_with_transit(graph, current, target, transit_rooms)
+            if path and len(path) < best_distance:
+                best_distance = len(path)
+                best_room = target
+                best_path = path
+        
+        if best_path and len(best_path) > 1:
+            for room in best_path[1:]:
+                if room not in full_route:
+                    full_route.append(room)
+            current = best_room
+            rooms_to_visit.remove(best_room)
+        else:
+            break
+    
+    # Expandir para incluir PASILLO donde sea necesario
+    full_route = expand_transit_points(full_route, transit_rooms)
+    
+    return full_route
+
 
 @routes_bp.route("/<route_id>", methods=["GET"])
 def get_route(route_id):
