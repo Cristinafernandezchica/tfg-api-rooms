@@ -17,7 +17,8 @@ def list_rooms():
             "_id": 1,
             "name": 1,
             "poi_id": 1,
-            "current_occupancy": 1
+            "current_occupancy": 1,
+            "description": 1
         }
     )
 
@@ -27,7 +28,8 @@ def list_rooms():
             "room_id": r["_id"],
             "name": r.get("name"),
             "poi_id": r.get("poi_id"),
-            "current_occupancy": r.get("current_occupancy", 0)
+            "current_occupancy": r.get("current_occupancy", 0),
+            "description": r.get("description", "")
         })
 
     return jsonify(rooms), 200

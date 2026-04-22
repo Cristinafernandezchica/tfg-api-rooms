@@ -14,6 +14,7 @@ def seed_rooms():
         {
             "_id": "ENTRADA",
             "name": "Entrada",
+            "description": "Puerta principal de la vivienda. Al entrar, a la izquierda hay un perchero de madera. Al frente, un armario empotrado con espejo.",
             "poi_id": "poi_57fd1fd2-fc14-47fd-b6df-e2f8589a3e7f",
             "has_beacon": False,
             "beacons": [],
@@ -24,6 +25,7 @@ def seed_rooms():
         {
             "_id": "SALON",
             "name": "Salón",
+            "description": "Amplio salón comedor con sofá color gris, mesa de comedor cuadrada, mesa de camilla y muble bar. Cuenta con un televisor plano de 37 pulgadas. Esta estancia cuenta con dos ventanas con vistas al patio del vecindario.",
             "poi_id": "poi_5ab33651-9e9f-444e-8023-c57dce5d276d",
             "has_beacon": True,
             "beacons": [
@@ -41,6 +43,7 @@ def seed_rooms():
         {
             "_id": "COCINA",
             "name": "Cocina",
+            "description": "Cocina amueblada en tonos grises, con encimera blanca. Cuenta con todo tipo de electrodomésicos: frigorífico, lavadora, lavavajillas, horno, microhondas y vitrocerámica.",
             "poi_id": "poi_fbc620c5-0578-43e1-b04b-9d9a93239d7d",
             "has_beacon": False,
             "beacons": [
@@ -58,6 +61,7 @@ def seed_rooms():
         {
             "_id": "HAB1",
             "name": "Habitación 1",
+            "description": "Al entrar, a la derecha tenemos un armario a los pies de la cama, que se encuentra en alto. Al fondo, un escritorio con silla de oficina. A su izquierda, una ventana con vistas al patio interior.",
             "poi_id": "poi_b9f47ce4-59d2-4015-b923-e0d3fab646ea",
             "has_beacon": True,
             "beacons": [
@@ -75,6 +79,7 @@ def seed_rooms():
         {
             "_id": "BAN2",
             "name": "Baño 2",
+            "description": "Baño completo, equpado con placa de ducha, inodoro y lavamanos. Cuenta con tendedero externo, hacia uno de los patios interiores.",
             "poi_id": "poi_70b24188-a590-4beb-b003-5aa9e7b44b95",
             "has_beacon": False,
             "beacons": [
@@ -92,6 +97,7 @@ def seed_rooms():
         {
             "_id": "HAB2",
             "name": "Habitación 2",
+            "description": "A la izquierda tenemos un amario de grandes dimensiones. En frente de este, está la cama de una plaza. Nada más entrar, nos encontramos con el escritorio, con su correspondiente silla de oficina. Frente a este, una ventana con vistas al exterior.",
             "poi_id": "poi_bedbfa50-eeca-40a4-8562-78799e66c2b3",
             "has_beacon": True,
             "beacons": [
@@ -109,6 +115,7 @@ def seed_rooms():
         {
             "_id": "HAB3",
             "name": "Habitación 3",
+            "description": "Esta habitación cuenta con una cama de matrimonio. A los pies de esta, encontramos un armario empotrado de grandes dimensiones. En el lado contrario a la puerta, tenemos un pequeño balcón con vistas al exterior.",
             "poi_id": "poi_f93ff721-4606-45dc-9fcc-bf1d1d00b920",
             "has_beacon": True,
             "beacons": [
@@ -126,6 +133,7 @@ def seed_rooms():
         {
             "_id": "PASILLO",
             "name": "Pasillo",
+            "description": "",
             "poi_id": "poi_089e6886-f194-4c5c-9e49-43b3c18a43e9",
             "has_beacon": False,
             "beacons": [],

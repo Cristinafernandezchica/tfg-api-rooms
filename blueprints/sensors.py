@@ -82,77 +82,101 @@ def heuristic_confidence(sensors):
     rssi_factor = max(0.0, min(1.0, (best_rssi + 100) / 60))
     return round(0.5 * n_factor + 0.5 * rssi_factor, 2)
 
-
+# Herística para determinar la habitación, basada en patrones de rssi de datos reales
 def heuristic_room_override(sensors):
-    sensors_sorted = sorted(sensors, key=lambda s: s["rssi"], reverse=True)
+    # Diccionario con los rssi de cada beacon
+    def rssi(beacon_id):
+        s = next((x for x in sensors if x["sensor_id"] == beacon_id), None)
+        return s["rssi"] if s else None
 
-    sid = sensors_sorted[0]["sensor_id"]
-    rssi = sensors_sorted[0]["rssi"]
+    salon_r   = rssi("BEACON_SALON")
+    cocina_r  = rssi("BEACON_COCINA")
+    hab1_r    = rssi("BEACON_HAB1")
+    hab2_r    = rssi("BEACON_HAB2")
+    hab3_r    = rssi("BEACON_HAB3")
+    ban2_r    = rssi("BEACON_BANO2")
 
-    if sid == "BEACON_SALON" and rssi > -65:
-        print(f"   [Heurística] Beacon SALON fuerte ({rssi}) -> SALON")
-        return "SALON"
+    # Se tratan los None como -100
+    def v(x):
+        return x if x is not None else -100
 
-    if sid == "BEACON_COCINA" and rssi > -73:
-        print(f"   [Heurística] Beacon COCINA fuerte ({rssi}) -> COCINA")
-        return "COCINA"
-
-    if sid == "BEACON_HAB1" and rssi > -70:
-        print(f"   [Heurística] Beacon HAB1 fuerte ({rssi}) -> HAB1")
+    # ------------- HABITACIONES ---------------------------------
+    # Umbral basado en p75 de cada beacon en su habitación + margen
+    if v(hab1_r) > -62:
+        print(f"   [H] HAB1 fuerte ({hab1_r}) -> HAB1")
         return "HAB1"
-
-    if sid == "BEACON_HAB2" and rssi > -70:
-        print(f"   [Heurística] Beacon HAB2 fuerte ({rssi}) -> HAB2")
+    if v(hab2_r) > -62:
+        print(f"   [H] HAB2 fuerte ({hab2_r}) -> HAB2")
         return "HAB2"
-
-    if sid == "BEACON_HAB3" and rssi > -70:
-        print(f"   [Heurística] Beacon HAB3 fuerte ({rssi}) -> HAB3")
+    if v(hab3_r) > -62:
+        print(f"   [H] HAB3 fuerte ({hab3_r}) -> HAB3")
         return "HAB3"
 
-    if sid == "BEACON_BANO2" and rssi > -75:
-        print(f"   [Heurística] Beacon BAN2 fuerte ({rssi}) -> BAN2")
+    # ── REGLA 2: BAN2 vs HAB3 — usar diferencia relativa ──────────────────────
+    # En BAN2: BEACON_BANO2 > BEACON_HAB3 siempre (media +8 dBm)
+    # En HAB3: BEACON_HAB3 > BEACON_BANO2 siempre (media +12 dBm)
+    if v(ban2_r) > -78 and v(hab3_r) > -78:
+        diff = v(ban2_r) - v(hab3_r)
+        if diff >= 3:
+            print(f"   [H] BAN2({ban2_r}) > HAB3({hab3_r}) diff={diff} -> BAN2")
+            return "BAN2"
+        elif diff <= -3:
+            print(f"   [H] HAB3({hab3_r}) > BAN2({ban2_r}) diff={diff} -> HAB3")
+            return "HAB3"
+    elif v(ban2_r) > -75 and v(hab3_r) == -100:
+        print(f"   [H] Solo BAN2 visible ({ban2_r}) -> BAN2")
         return "BAN2"
+    elif v(hab3_r) > -70 and v(ban2_r) == -100:
+        print(f"   [H] Solo HAB3 visible ({hab3_r}) -> HAB3")
+        return "HAB3"
 
-    salon = [s for s in sensors if s["sensor_id"] == "BEACON_SALON"]
-    cocina = [s for s in sensors if s["sensor_id"] == "BEACON_COCINA"]
-    hab1 = [s for s in sensors if s["sensor_id"] == "BEACON_HAB1"]
-    hab2 = [s for s in sensors if s["sensor_id"] == "BEACON_HAB2"]
-    hab3 = [s for s in sensors if s["sensor_id"] == "BEACON_HAB3"]
-    ban2 = [s for s in sensors if s["sensor_id"] == "BEACON_BANO2"]
-    
-    avg_salon = sum(s["rssi"] for s in salon) / len(salon) if salon else -100
-    avg_cocina = sum(s["rssi"] for s in cocina) / len(cocina) if cocina else -100
-    avg_hab1 = hab1[0]["rssi"] if hab1 else -100
-    avg_hab2 = hab2[0]["rssi"] if hab2 else -100
-    avg_hab3 = hab3[0]["rssi"] if hab3 else -100
-    avg_ban2 = ban2[0]["rssi"] if ban2 else -100
-    
-    print(f"   [Heurística] Promedios - SALÓN: {avg_salon:.1f}, COCINA: {avg_cocina:.1f}, HAB1: {avg_hab1:.1f}, BAN2: {avg_ban2:.1f}")
-    
-    if salon and avg_salon > -85:
-        otras_habitaciones = 0
-        if avg_cocina > -80: otras_habitaciones += 1
-        if avg_hab1 > -80: otras_habitaciones += 1
-        if avg_hab2 > -80: otras_habitaciones += 1
-        if avg_hab3 > -80: otras_habitaciones += 1
-        if avg_ban2 > -80: otras_habitaciones += 1
-        
-        if otras_habitaciones <= 1:
-            print(f"   [Heurística] Patrón ENTRADA A: solo SALÓN detectable")
-            return "ENTRADA"
-    
-    if salon and cocina:
-        diferencia = abs(avg_salon - avg_cocina)
-        if diferencia < 10 and avg_salon > -85 and avg_cocina > -85:
-            print(f"   [Heurística] Patrón ENTRADA B: SALÓN y COCINA cercanos")
-            return "ENTRADA"
-    
-    if salon and -80 < avg_salon < -65:
-        if avg_cocina < -75 or avg_cocina == -100:
-            print(f"   [Heurística] Patrón ENTRADA E: SALÓN en rango ENTRADA")
-            return "ENTRADA"
-    
-    print(f"   [Heurística] Ningún patrón coincidió")
+    # ── REGLA 3: COCINA — BEACON_HAB1 muy débil es clave discriminadora ───────
+    # En COCINA: HAB1 siempre < -75 (min real -75, media -85.6)
+    # En HAB1:   COCINA puede solaparse (-66 a -89), pero HAB1 siempre domina
+    if v(cocina_r) > -72:
+        if v(hab1_r) <= -75 or hab1_r is None:
+            print(f"   [H] COCINA({cocina_r}), HAB1 débil({hab1_r}) -> COCINA")
+            return "COCINA"
+
+    # ── REGLA 4: HAB1 — BEACON_COCINA siempre débil en HAB1 ──────────────────
+    # En HAB1: COCINA nunca supera -66 (cuando presente), HAB1 siempre domina
+    if v(hab1_r) > -67 and v(cocina_r) < -70:
+        print(f"   [H] HAB1({hab1_r}) domina, COCINA débil({cocina_r}) -> HAB1")
+        return "HAB1"
+
+    # ── REGLA 5: SALON vs ENTRADA — diferencia relativa ───────────────────────
+    # Discriminador clave: diff(salon - cocina)
+    # SALON:   diff ≥ 3  (min real), media 14.5
+    # ENTRADA: diff puede ser negativa hasta -9, media 7.1
+    if v(salon_r) > -82:
+        if cocina_r is not None:
+            diff = v(salon_r) - v(cocina_r)
+            if diff >= 12:
+                # Diferencia grande → claramente en SALON
+                print(f"   [H] SALON({salon_r}) - COCINA({cocina_r}) = {diff} -> SALON")
+                return "SALON"
+            elif diff <= 5:
+                # SALON y COCINA equiparados o COCINA domina → ENTRADA
+                print(f"   [H] SALON({salon_r}) ≈ COCINA({cocina_r}) diff={diff} -> ENTRADA")
+                return "ENTRADA"
+            else:
+                # Zona gris (diff 6-11): usar umbral absoluto de SALON
+                if v(salon_r) > -63:
+                    print(f"   [H] Zona gris: SALON fuerte ({salon_r}) -> SALON")
+                    return "SALON"
+                else:
+                    print(f"   [H] Zona gris: SALON moderado ({salon_r}) -> ENTRADA")
+                    return "ENTRADA"
+        else:
+            # COCINA no visible: si SALON es fuerte → SALON; si es débil → ENTRADA
+            if v(salon_r) > -70:
+                print(f"   [H] SALON({salon_r}) sin COCINA visible -> SALON")
+                return "SALON"
+            else:
+                print(f"   [H] SALON débil ({salon_r}) sin COCINA -> ENTRADA")
+                return "ENTRADA"
+
+    print(f"   [H] Ningún patrón coincidió")
     return None
 
 
