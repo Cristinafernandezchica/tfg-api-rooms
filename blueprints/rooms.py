@@ -7,9 +7,6 @@ rooms_bp = Blueprint("rooms", __name__)
 # Lista todas las habitaciones con información básica y ocupación actual de cada una
 @rooms_bp.route("", methods=["GET"])
 def list_rooms():
-    """
-    Lista todas las habitaciones con información básica y ocupación actual.
-    """
     db = get_db()
     cursor = db.rooms.find(
         {"is_transit": {"$ne": True}},
@@ -34,21 +31,11 @@ def list_rooms():
 
     return jsonify(rooms), 200
 
-
 # Número de personas en cada estancia actualmente (solo habría que agrupar por habitaciones)
 @rooms_bp.route("/occupancy", methods=["GET"])
 def occupancy():
-    """
-    Devuelve solo la ocupación por habitación (mapa simple).
-    """
     db = get_db()
-    cursor = db.rooms.find(
-        {},
-        {
-            "_id": 1,
-            "current_occupancy": 1
-        }
-    )
+    cursor = db.rooms.find({}, {"_id": 1, "current_occupancy": 1})
 
     result = {}
     for r in cursor:
@@ -70,20 +57,10 @@ def get_room_events_user(user_id):
     events = list(db.room_events.find({"user_id": user_id}, {"_id": 0}))
     return jsonify(events), 200
 
-
 # Número de personas en cada estancia en cualquier momento del pasado (rango de fechas)
 @rooms_bp.route("/occupancy/history", methods=["GET"])
 def occupancy_history():
-    """
-    Devuelve la ocupación (entradas/salidas) de una habitación
-    en un rango de fechas.
-    Parámetros:
-      - room_id (obligatorio)
-      - from (ISO string, opcional)
-      - to (ISO string, opcional)
-    """
     db = get_db()
-
     room_id = request.args.get("room_id")
     from_str = request.args.get("from")
     to_str = request.args.get("to")
@@ -126,12 +103,6 @@ def occupancy_history():
 # Devulve la ocupación de una estancia en un momento concreto
 @rooms_bp.route("/occupancy/at", methods=["GET"])
 def occupancy_at():
-    """
-    Devuelve la ocupación de una habitación en un instante concreto.
-    Parámetros:
-      - room_id
-      - at (ISO datetime)
-    """
     db = get_db()
     room_id = request.args.get("room_id")
     at_str = request.args.get("at")
@@ -182,7 +153,6 @@ def visits_current():
 
     return jsonify(result), 200
 
-
 # Número de personas que han pasado por cada estancia en un momento concreto
 @rooms_bp.route("/visits/at", methods=["GET"])
 def visits_at():
@@ -216,3 +186,60 @@ def get_zones(room_id):
     db = get_db()
     zones = list(db.room_zones.find({"room_id": room_id}, {"_id": 0}))
     return jsonify(zones), 200
+
+
+
+@rooms_bp.route("/admin/list", methods=["GET"])
+def admin_list_rooms():
+    """Lista todas las habitaciones (excluyendo el pasillo)"""
+    db = get_db()
+    # Excluir zonas de tránsito
+    cursor = db.rooms.find({"is_transit": {"$ne": True}})
+    rooms = []
+    for r in cursor:
+        room = {
+            "room_id": r["_id"],
+            "name": r.get("name"),
+            "description": r.get("description", ""),
+            "current_occupancy": r.get("current_occupancy", 0),
+            "is_transit": r.get("is_transit", False),
+            "poi_id": r.get("poi_id"),
+            "connections": r.get("connections", [])
+        }
+        rooms.append(room)
+    return jsonify(rooms), 200
+
+
+@rooms_bp.route("/<room_id>", methods=["GET"])
+def get_room(room_id):
+    """Obtiene información completa de una habitación."""
+    db = get_db()
+    room = db.rooms.find_one({"_id": room_id}, {"_id": 0})
+    if not room:
+        return jsonify({"error": "Room not found"}), 404
+    return jsonify(room), 200
+
+
+@rooms_bp.route("/<room_id>", methods=["PUT"])
+def update_room(room_id):
+    """Actualiza la información de una habitación"""
+    db = get_db()
+    data = request.get_json() or {}
+    
+    existing = db.rooms.find_one({"_id": room_id})
+    if not existing:
+        return jsonify({"error": "Room not found"}), 404
+    
+    allowed_fields = ["name", "description", "poi_id", "is_transit"]
+    update_data = {}
+    
+    for field in allowed_fields:
+        if field in data:
+            update_data[field] = data[field]
+    
+    if not update_data:
+        return jsonify({"error": "No fields to update"}), 400
+    
+    db.rooms.update_one({"_id": room_id}, {"$set": update_data})
+    updated = db.rooms.find_one({"_id": room_id}, {"_id": 0})
+    return jsonify(updated), 200
