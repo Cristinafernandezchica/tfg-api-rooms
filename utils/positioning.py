@@ -1,50 +1,44 @@
+# positioning.py (versión mejorada)
 from typing import List, Dict, Optional
-# No es definitivo, va a cambiar porque se va a intentar entrenar para detectar las habitaciones y punto dentro de la propia habitación
+
 def estimate_room_from_sensors(
     sensors: List[Dict],
     sensor_room_map: Dict[str, str],
-    min_sensors: int = 1
+    last_room: Optional[str] = None
 ) -> Optional[str]:
     """
-    Calcula la habitación más probable a partir de una lista de lecturas
-    de sensores BLE.
-
-    sensors: [
-        {"sensor_id": "BEACON_SALON", "rssi": -67},
-        {"sensor_id": "BEACON_HAB1", "rssi": -80},
-        ...
-    ]
-
-    sensor_room_map:
-        {"BEACON_SALON": "SALON", "BEACON_HAB1": "HAB1", ...}
-
-    Devuelve el room_id más probable o None si no se puede estimar.
+    Fallback inteligente para estimar habitación.
+    Prioriza las habitaciones con señales muy fuertes.
     """
 
-    # Filtrar solo sensores conocidos (que estén mapeados a rooms)
-    filtered = [
+    # Filtrar sensores que conocemos y tienen RSSI
+    known_sensors = [
         s for s in sensors
         if s.get("sensor_id") in sensor_room_map and "rssi" in s
     ]
 
-    if len(filtered) < min_sensors:
-        return None
+    if not known_sensors:
+        return last_room
 
-    # Agrupar por habitación y quedarnos con el mejor RSSI (más cercano a 0)
+    # 1. Regla de Oro: ¿Algún beacon está MUY cerca? (RSSI > -70)
+    for s in known_sensors:
+        if s["rssi"] > -70:
+            room = sensor_room_map[s["sensor_id"]]
+            print(f"   [Fallback] Beacon {s['sensor_id']} muy fuerte ({s['rssi']}) -> {room}")
+            return room
+
+    # 2. Agrupar por habitación y quedarse con el mejor RSSI
     room_best_rssi: Dict[str, float] = {}
-
-    for s in filtered:
-        room_id = sensor_room_map[s["sensor_id"]]
+    for s in known_sensors:
+        room = sensor_room_map[s["sensor_id"]]
         rssi = s["rssi"]
-        if room_id not in room_best_rssi:
-            room_best_rssi[room_id] = rssi
-        else:
-            # Elegimos el RSSI "más fuerte" (numéricamente mayor, ej -60 > -80)
-            room_best_rssi[room_id] = max(room_best_rssi[room_id], rssi)
+        if room not in room_best_rssi or rssi > room_best_rssi[room]:
+            room_best_rssi[room] = rssi
 
-    if not room_best_rssi:
-        return None
+    # 3. Elegir la habitación con el mejor RSSI
+    if room_best_rssi:
+        best_room = max(room_best_rssi.items(), key=lambda x: x[1])[0]
+        print(f"   [Fallback] Mejor RSSI por habitación: {room_best_rssi} -> {best_room}")
+        return best_room
 
-    # Escoger la habitación con mejor RSSI
-    best_room = max(room_best_rssi.items(), key=lambda x: x[1])[0]
-    return best_room
+    return last_room
