@@ -140,45 +140,66 @@ def occupancy_at():
 @rooms_bp.route("/visits/current", methods=["GET"])
 def visits_current():
     db = get_db()
-    rooms = db.rooms.find({}, {"_id": 1})
+    rooms = list(db.rooms.find({}, {"_id": 1, "name": 1}))
+
+    if not rooms:
+        return jsonify({}), 200
 
     result = {}
-    for r in rooms:
-        room_id = r["_id"]
+    for room in rooms:
+        room_id = room["_id"]
         count = db.room_events.count_documents({
             "room_id": room_id,
             "event": "enter"
         })
-        result[room_id] = count
+        result[room_id] = {
+            "room_id": room_id,
+            "name": room.get("name", room_id),
+            "visits": count
+        }
 
     return jsonify(result), 200
 
-# Número de personas que han pasado por cada estancia en un momento concreto
+
+# Número de personas que han pasado por cada estancia en un momento concret
 @rooms_bp.route("/visits/at", methods=["GET"])
 def visits_at():
     db = get_db()
-    room_id = request.args.get("room_id")
-    at_str = request.args.get("at")
+    date_str = request.args.get("date")
 
-    if not room_id or not at_str:
-        return jsonify({"error": "room_id and at are required"}), 400
+    if not date_str:
+        return jsonify({"error": "date is required"}), 400
 
     try:
-        at_dt = datetime.fromisoformat(at_str)
-    except:
-        return jsonify({"error": "invalid datetime"}), 400
+        # Fin del día seleccionado en UTC — contar todo hasta ese momento
+        naive_date = datetime.fromisoformat(date_str)
+        end_of_day = naive_date.replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        ).isoformat() + "+00:00"  # String ISO con tz, igual que los de BD
+    except Exception as e:
+        return jsonify({"error": f"invalid date format: {e}"}), 400
 
-    count = db.room_events.count_documents({
-        "room_id": room_id,
-        "event": "enter",
-        "timestamp": {"$lte": at_dt}
-    })
+    rooms = list(db.rooms.find({}, {"_id": 1, "name": 1}))
 
-    return jsonify({
-        "room_id": room_id,
-        "at": at_str,
-        "visits": count
-    }), 200
+    result = {}
+    for room in rooms:
+        room_id = room["_id"]
+
+        # Filtrar directamente en Mongo comparando el string ISO
+        # Funciona porque el formato "2026-04-26T23:59:59..." ordena bien lexicográficamente
+        count = db.room_events.count_documents({
+            "room_id": room_id,
+            "event": "enter",
+            "timestamp": {"$lte": end_of_day}
+        })
+
+        result[room_id] = {
+            "room_id": room_id,
+            "name": room.get("name", room_id),
+            "visits": count
+        }
+
+    return jsonify(result), 200
 
 # Obtener las zonas de una habitación
 @rooms_bp.route("/<room_id>/zones", methods=["GET"])

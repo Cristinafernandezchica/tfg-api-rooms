@@ -420,14 +420,37 @@ def reload_models():
 @sensors_bp.route("/ml/status", methods=["GET"])
 def training_status():
     db = get_db()
-    pipeline = [
-        {"$group": {
-            "_id": {"room": "$room_id", "zone": "$zone_id"},
-            "count": {"$sum": 1}
-        }}
-    ]
-    data = list(db.training_sensor_data.aggregate(pipeline))
-    return jsonify(data), 200
+    try:
+        all_samples = list(db.training_sensor_data.find({}, {"_id": 0, "room_id": 1, "zone_id": 1}))
+        
+        total_samples = len(all_samples)
+        samples_by_room = {}
+        
+        for sample in all_samples:
+            room = sample.get("room_id", "desconocido")
+            zone = sample.get("zone_id", "desconocido")
+            
+            if room not in samples_by_room:
+                samples_by_room[room] = {
+                    "total": 0,
+                    "zones": {}
+                }
+            
+            if zone not in samples_by_room[room]["zones"]:
+                samples_by_room[room]["zones"][zone] = 0
+            
+            samples_by_room[room]["zones"][zone] += 1
+            samples_by_room[room]["total"] += 1
+        
+        result = {
+            "status": "ok",
+            "total_samples": total_samples,
+            "samples_by_room": samples_by_room
+        }
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 
 @sensors_bp.route("/get_confirmed_position", methods=["GET"])
