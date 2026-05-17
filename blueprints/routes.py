@@ -31,9 +31,7 @@ def pois_with_coords(db, poi_ids):
 
     return result
 
-
-# routes.py - Modificar create_auto_route
-
+# Para la generación de las rutas
 @routes_bp.route("/auto/<algorithm>", methods=["POST"])
 def create_auto_route(algorithm):
     db = get_db()
@@ -47,7 +45,7 @@ def create_auto_route(algorithm):
 
     if force_start:
         start_room = "ENTRADA"
-        print(f"🚪 Ruta forzada desde ENTRADA")
+        print(f"Ruta forzada desde ENTRADA")
     else:
         # Obtener posición CONFIRMADA del usuario
         user_state = db.users_state.find_one({"user_id": user_id})
@@ -60,7 +58,7 @@ def create_auto_route(algorithm):
         if not start_room:
             return jsonify({"error": "no confirmed room found"}), 404
             
-        print(f"📍 Ruta desde posición confirmada: {start_room} (confirmada en {confirmed_at})")
+        print(f"Ruta desde posición confirmada: {start_room} (confirmada en {confirmed_at})")
 
     # Obtener el grafo
     graph, transit_rooms = build_room_graph(db)
@@ -97,7 +95,7 @@ def create_auto_route(algorithm):
     # Expandir para incluir PASILLO
     full_route = expand_transit_points(full_route, transit_rooms)
     
-    print(f"📋 Ruta generada: {full_route}")
+    print(f"Ruta generada: {full_route}")
     
     # Convertir a POIs
     poi_ids = rooms_to_pois(db, full_route)
@@ -123,46 +121,6 @@ def create_auto_route(algorithm):
         "route_id": route_id
     }), 200
 
-def generate_route_from_start(graph, start_room, all_rooms, transit_rooms):
-    """
-    Genera una ruta que empieza en start_room y visita todas las demás habitaciones
-    usando el algoritmo de vecino más cercano (greedy)
-    """
-    if start_room not in all_rooms and start_room != "PASILLO":
-        start_room = "ENTRADA"
-    
-    # Habitaciones a visitar (todas excepto la inicial)
-    rooms_to_visit = [r for r in all_rooms if r != start_room]
-    
-    full_route = [start_room]
-    current = start_room
-    
-    while rooms_to_visit:
-        best_room = None
-        best_path = None
-        best_distance = float('inf')
-        
-        for target in rooms_to_visit:
-            path = bfs_with_transit(graph, current, target, transit_rooms)
-            if path and len(path) < best_distance:
-                best_distance = len(path)
-                best_room = target
-                best_path = path
-        
-        if best_path and len(best_path) > 1:
-            for room in best_path[1:]:
-                if room not in full_route:
-                    full_route.append(room)
-            current = best_room
-            rooms_to_visit.remove(best_room)
-        else:
-            break
-    
-    # Expandir para incluir PASILLO donde sea necesario
-    full_route = expand_transit_points(full_route, transit_rooms)
-    
-    return full_route
-
 
 @routes_bp.route("/<route_id>", methods=["GET"])
 def get_route(route_id):
@@ -176,7 +134,7 @@ def get_route(route_id):
     del route["_id"]
     return jsonify(route), 200
 
-
+# No se está utilizando
 @routes_bp.route("/assign", methods=["POST"])
 def assign_route():
     """
@@ -329,7 +287,8 @@ def delete_route(route_id):
     return jsonify({"status": "deleted"}), 200
 
 
-# Preview de la ruta (por si quiere elegir entre varias rutas antes de asignar)
+# Preview de la ruta (por si quiere elegir entre varias rutas antes de asignar)  --  No se está usando
+'''
 @routes_bp.route("/preview/<algorithm>", methods=["POST"])
 def preview_route(algorithm):
     db = get_db()
@@ -364,7 +323,7 @@ def preview_route(algorithm):
         "poi_ids": poi_ids,
         "pois": poi_route_with_coords
     }), 200
-
+'''
 
 # Quitar ruta asignada a un usuario
 @routes_bp.route("/reset_user", methods=["POST"])

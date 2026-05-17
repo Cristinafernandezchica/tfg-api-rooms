@@ -84,7 +84,6 @@ def heuristic_confidence(sensors):
 
 # Herística para determinar la habitación, basada en patrones de rssi de datos reales
 def heuristic_room_override(sensors):
-    # Diccionario con los rssi de cada beacon
     def rssi(beacon_id):
         s = next((x for x in sensors if x["sensor_id"] == beacon_id), None)
         return s["rssi"] if s else None
@@ -100,21 +99,20 @@ def heuristic_room_override(sensors):
     def v(x):
         return x if x is not None else -100
 
-    # ------------- HABITACIONES ---------------------------------
-    # Umbral basado en p75 de cada beacon en su habitación + margen
-    if v(hab1_r) > -62:
+    # HABITACIONES
+    if v(hab1_r) > -65:
         print(f"   [H] HAB1 fuerte ({hab1_r}) -> HAB1")
         return "HAB1"
-    if v(hab2_r) > -62:
+    if v(hab2_r) > -65:
         print(f"   [H] HAB2 fuerte ({hab2_r}) -> HAB2")
         return "HAB2"
-    if v(hab3_r) > -62:
+    if v(hab3_r) > -65:
         print(f"   [H] HAB3 fuerte ({hab3_r}) -> HAB3")
         return "HAB3"
 
-    # ── REGLA 2: BAN2 vs HAB3 — usar diferencia relativa ──────────────────────
-    # En BAN2: BEACON_BANO2 > BEACON_HAB3 siempre (media +8 dBm)
-    # En HAB3: BEACON_HAB3 > BEACON_BANO2 siempre (media +12 dBm)
+    # BAN2 vs HAB3
+    # En BAN2: BEACON_BANO2 > BEACON_HAB3
+    # En HAB3: BEACON_HAB3 > BEACON_BANO2
     if v(ban2_r) > -78 and v(hab3_r) > -78:
         diff = v(ban2_r) - v(hab3_r)
         if diff >= 3:
@@ -130,51 +128,36 @@ def heuristic_room_override(sensors):
         print(f"   [H] Solo HAB3 visible ({hab3_r}) -> HAB3")
         return "HAB3"
 
-    # ── REGLA 3: COCINA — BEACON_HAB1 muy débil es clave discriminadora ───────
-    # En COCINA: HAB1 siempre < -75 (min real -75, media -85.6)
-    # En HAB1:   COCINA puede solaparse (-66 a -89), pero HAB1 siempre domina
+    # COCINA
+    # En COCINA: HAB1 < -75 (en gran parte de las muestras HAB1 tiene señal débil)
     if v(cocina_r) > -72:
         if v(hab1_r) <= -75 or hab1_r is None:
             print(f"   [H] COCINA({cocina_r}), HAB1 débil({hab1_r}) -> COCINA")
             return "COCINA"
 
-    # ── REGLA 4: HAB1 — BEACON_COCINA siempre débil en HAB1 ──────────────────
-    # En HAB1: COCINA nunca supera -66 (cuando presente), HAB1 siempre domina
+    # HAB1
     if v(hab1_r) > -67 and v(cocina_r) < -70:
         print(f"   [H] HAB1({hab1_r}) domina, COCINA débil({cocina_r}) -> HAB1")
         return "HAB1"
 
-    # ── REGLA 5: SALON vs ENTRADA — diferencia relativa ───────────────────────
-    # Discriminador clave: diff(salon - cocina)
-    # SALON:   diff ≥ 3  (min real), media 14.5
-    # ENTRADA: diff puede ser negativa hasta -9, media 7.1
+    # SALON
     if v(salon_r) > -82:
         if cocina_r is not None:
             diff = v(salon_r) - v(cocina_r)
-            if diff >= 12:
-                # Diferencia grande → claramente en SALON
+            if diff >= 12 or (diff >= 3 and v(salon_r) > -63):
                 print(f"   [H] SALON({salon_r}) - COCINA({cocina_r}) = {diff} -> SALON")
                 return "SALON"
-            elif diff <= 5:
-                # SALON y COCINA equiparados o COCINA domina → ENTRADA
-                print(f"   [H] SALON({salon_r}) ≈ COCINA({cocina_r}) diff={diff} -> ENTRADA")
-                return "ENTRADA"
             else:
-                # Zona gris (diff 6-11): usar umbral absoluto de SALON
-                if v(salon_r) > -63:
-                    print(f"   [H] Zona gris: SALON fuerte ({salon_r}) -> SALON")
-                    return "SALON"
-                else:
-                    print(f"   [H] Zona gris: SALON moderado ({salon_r}) -> ENTRADA")
-                    return "ENTRADA"
+                # En lugar de ENTRADA, devolvemos None (lo pasamos a ML o fallback al no tener sensor))
+                print(f"   [H] Patrón de ENTRADA detectado, pero no se acepta -> None")
+                return None
         else:
-            # COCINA no visible: si SALON es fuerte → SALON; si es débil → ENTRADA
             if v(salon_r) > -70:
                 print(f"   [H] SALON({salon_r}) sin COCINA visible -> SALON")
                 return "SALON"
             else:
-                print(f"   [H] SALON débil ({salon_r}) sin COCINA -> ENTRADA")
-                return "ENTRADA"
+                print(f"   [H] Señal débil sin COCINA (posible ENTRADA) -> None")
+                return None
 
     print(f"   [H] Ningún patrón coincidió")
     return None
@@ -238,8 +221,7 @@ def update_position_from_sensors():
     
     confidence = heuristic_confidence(sensors)
     
-    # IMPORTANTE: Importar las funciones de position.py DENTRO de la función
-    # para evitar importaciones circulares
+    # Se importa dentro para evitar problemas de dependencias circulares con position.py
     from blueprints.position import add_pending_detection, get_confirmed_room, clear_pending_detections, pending_detections, apply_room_update
     
     # Añadir detección pendiente
@@ -361,7 +343,7 @@ def detect_once():
         "sensors_count": len(sensors)
     }), 200
 
-
+# Para guardar datos de entrenamiento manualmente
 @sensors_bp.route("/training_data", methods=["POST"])
 def save_training_data():
     db = get_db()
@@ -391,14 +373,14 @@ def save_training_data():
     db.training_sensor_data.insert_one(doc)
     return jsonify({"status": "ok"}), 200
 
-
+# Para borrar los datos de entrenamiento existentes desde la aplicación
 @sensors_bp.route("/ml/reset_training", methods=["POST"])
 def reset_training():
     db = get_db()
     db.training_sensor_data.delete_many({})
     return jsonify({"status": "reset_ok"}), 200
 
-
+# Para ejecutar el script de entrenamiento desde la apliación
 @sensors_bp.route("/ml/train", methods=["POST"])
 def train_models_api():
     try:
@@ -407,7 +389,7 @@ def train_models_api():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+# Para cargar el modelo entrenado desde la apliación
 @sensors_bp.route("/ml/reload_models", methods=["POST"])
 def reload_models():
     try:
@@ -416,7 +398,7 @@ def reload_models():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+# Para revisar los datos de entrenamiento capturados desde la aplicación
 @sensors_bp.route("/ml/status", methods=["GET"])
 def training_status():
     db = get_db()
@@ -452,7 +434,7 @@ def training_status():
     except Exception as e:
         return jsonify({"error": str(e), "status": "error"}), 500
 
-
+# Actualmente en desuso, diseñada para el sistema de confirmación
 @sensors_bp.route("/get_confirmed_position", methods=["GET"])
 def get_confirmed_position():
     """

@@ -1,4 +1,3 @@
-# positioning.py (versión mejorada)
 from typing import List, Dict, Optional
 
 def estimate_room_from_sensors(
@@ -20,7 +19,7 @@ def estimate_room_from_sensors(
     if not known_sensors:
         return last_room
 
-    # 1. Regla de Oro: ¿Algún beacon está MUY cerca? (RSSI > -70)
+    # 1. ¿Algún beacon está MUY cerca? (RSSI > -70)
     for s in known_sensors:
         if s["rssi"] > -70:
             room = sensor_room_map[s["sensor_id"]]

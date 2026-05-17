@@ -83,17 +83,16 @@ def clear_pending_detections(user_id):
     pending_detections[user_id].clear()
 
 
-# ── Cálculo de ocupación ─────────────────────────────────────────────────────
+# CÁLCULO DE OCUPACIÓN
 
+# Se definen zonas de tránsito ya que no son una estancia real, si no que las conecta
 def is_transit_room(db, room_id):
     """Verifica si una habitación es zona de tránsito (no cuenta para ocupación)"""
     room = db.rooms.find_one({"_id": room_id}, {"is_transit": 1})
     return room and room.get("is_transit", False)
 
-# Para recalcular la ocupación de las habitaciones contando las entradas 
-# y salidas registradas en room_events. Esto lo actualiza en current_occupancy 
-# de cada habitación. 
-# Se llama cada vez que se confirma un cambio de posición o se fuerza una posición
+
+'''
 @position_bp.route("/recalculate_occupancy", methods=["POST"])
 def recalc_occupancy():
     """Endpoint administrativo para recalcular toda la ocupación desde cero"""
@@ -137,6 +136,7 @@ def recalc_occupancy():
         "occupancy": dict(current_occupancy_memory),
         "active_users": len(active_users)
     }), 200
+'''
 
 # Aquí se entra tras pasar el filtro de 3 detecciones. Se actualiza el estado del usuario,
 # registramos los eventos de entrada/salida y recalculamos la ocupación de las habitaciones.
@@ -209,7 +209,7 @@ def apply_room_update(db, user_id, detected_room, confidence, timestamp):
                 {"$inc": {"current_occupancy": 1}}
             )
         
-        check_low_occupancy_and_notify(db, user_id, detected_room)
+        check_low_occupancy_and_notify(db, user_id, detected_room) # Actualmente no se manda ninguna notificación, pensado para funcionalidad futura
         confirmed_positions[user_id] = detected_room
         return {"status": "ok", "event": "enter", "room": detected_room}, 200
 
@@ -231,7 +231,6 @@ def apply_room_update(db, user_id, detected_room, confidence, timestamp):
     logging.info(f"Usuario {user_id} cambió de {current_room} a {detected_room}")
     print(f"Cambio confirmado: {current_room} -> {detected_room}")
 
-    # --- ACTUALIZACIÓN INCREMENTAL DE OCUPACIÓN ---
     # 1. Usuario sale de la habitación anterior
     if current_room and not is_transit_room(db, current_room):
         current_occupancy_memory[current_room] -= 1
@@ -286,10 +285,10 @@ def apply_room_update(db, user_id, detected_room, confidence, timestamp):
     }, 200
 
 
-# ── Endpoints ────────────────────────────────────────────────────────────────
 
 # Para actualizar la posición sin pasar por el sistema de confirmación de habitación. 
 # Para pruebas o en caso de que se nos mande la habitación externamente ya confirmada. 
+# ACTUALMENTE EN DESHUSO, diseñado para pruebas anteriores
 @position_bp.route("/update", methods=["POST"])
 def update_position():
     db   = get_db()
@@ -313,27 +312,9 @@ def update_position():
     return jsonify(result), status_code
 
 
-# Nos da el estado de todos los usuarios con su habitación actual, 
-# la última actualización, confianza y el último evento registrado.
-@position_bp.route("/users_state", methods=["GET"])
-def get_users_state():
-    db    = get_db()
-    users = list(db.users_state.find({}, {"_id": 0}))
-    return jsonify(users), 200
-
-
-# Igual que arriba, pero para un usuario concreto. 
-# 404 si el usuario no tiene posición registrada aún.
-@position_bp.route("/users_state/<user_id>", methods=["GET"])
-def get_user_state(user_id):
-    db   = get_db()
-    user = db.users_state.find_one({"user_id": user_id}, {"_id": 0})
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-    return jsonify(user), 200
-
 # Da la última habitación confirmada de un usuario
 # Primero mira en memoria, si no está, va a BD y actualiza la caché
+# ACTUALMENTE EN DESHUSO
 @position_bp.route("/confirmed_position/<user_id>", methods=["GET"])
 def get_confirmed_position(user_id):
     db = get_db()
@@ -358,6 +339,7 @@ def get_confirmed_position(user_id):
 
 
 # Para forzar la posición de un usuario a ENTRADA, sin pasar por el sistema de confirmación.
+# ACTUALMENTE EN DESHUSO, diseñado para pruebas anteriores
 @position_bp.route("/force_start", methods=["POST"])
 def force_start_from_entrada():
     db   = get_db()
@@ -435,6 +417,7 @@ def force_start_from_entrada():
 # Comprobar si la ocupación de una habitación ha bajado el umbral configurado 
 # por el usuario, si es así, enviar una alerta. 
 # Se llama cada vez que se confirma un cambio de posición.
+# Está implmentada para futuras funcionalidades, no se está haciendo uso real de ella
 def check_low_occupancy_and_notify(db, user_id, room_id):
     """
     Comprueba si la ocupación de una habitación ha bajado del umbral
@@ -494,6 +477,7 @@ def check_low_occupancy_and_notify(db, user_id, room_id):
 #  Caso 2: Posición confirmada, pero con detecciones de otrta habitación (el cambio está en proceso)
 #  Caso 3: Sin estado confirmado pero con detecciones acumulándose
 #  Caso 4: Sin posición y sin detecciones
+'''
 @position_bp.route("/position_status/<user_id>", methods=["GET"])
 def get_position_status(user_id):
     db = get_db()
@@ -546,6 +530,7 @@ def get_position_status(user_id):
         "pending_count": 0,
         "confirmed":     False
     }), 200
+'''
 
 
 
