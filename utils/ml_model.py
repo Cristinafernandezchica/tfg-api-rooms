@@ -13,7 +13,7 @@ def load_models():
     sensor_ids_path = os.path.join(base_path, "scripts/sensor_ids.pkl")
 
     if not os.path.exists(room_model_path):
-        print("⚠️ No se encontró room_model.pkl — usando fallback.")
+        print("No se encontró room_model.pkl — usando fallback.")
         return
 
     _room_model = joblib.load(room_model_path)

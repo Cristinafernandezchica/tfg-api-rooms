@@ -51,13 +51,16 @@ def get_room_events():
     return jsonify(events), 200
 
 # Devuelve todas las entradas/salidas registradas de un usuario concreto
+'''
 @rooms_bp.route("/room_events/<user_id>", methods=["GET"])
 def get_room_events_user(user_id):
     db = get_db()
     events = list(db.room_events.find({"user_id": user_id}, {"_id": 0}))
     return jsonify(events), 200
+'''
 
 # Número de personas en cada estancia en cualquier momento del pasado (rango de fechas)
+'''
 @rooms_bp.route("/occupancy/history", methods=["GET"])
 def occupancy_history():
     db = get_db()
@@ -99,6 +102,7 @@ def occupancy_history():
         "count": len(events),
         "events": events
     }), 200
+'''
 
 # Devulve la ocupación de una estancia en un momento concreto
 @rooms_bp.route("/occupancy/at", methods=["GET"])
@@ -171,11 +175,10 @@ def visits_at():
         return jsonify({"error": "date is required"}), 400
 
     try:
-        # Fin del día seleccionado en UTC — contar todo hasta ese momento
         naive_date = datetime.fromisoformat(date_str)
         end_of_day = naive_date.replace(
             hour=23, minute=59, second=59, microsecond=999999
-        ).isoformat() + "+00:00"  # String ISO con tz, igual que los de BD
+        ).isoformat() + "+00:00"
     except Exception as e:
         return jsonify({"error": f"invalid date format: {e}"}), 400
 
@@ -185,8 +188,6 @@ def visits_at():
     for room in rooms:
         room_id = room["_id"]
 
-        # Filtrar directamente en Mongo comparando el string ISO
-        # Funciona porque el formato "2026-04-26T23:59:59..." ordena bien lexicográficamente
         count = db.room_events.count_documents({
             "room_id": room_id,
             "event": "enter",
